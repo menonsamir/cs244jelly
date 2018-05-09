@@ -277,8 +277,8 @@ def experiment(net):
     print server_perm
     print mysenders, mysenders
 
-    #results = pairTest(mysenders, myreceivers)
-    net.pingAll()
+    results = pairTest(mysenders, myreceivers)
+    #net.pingAll()
     print results
     
 
