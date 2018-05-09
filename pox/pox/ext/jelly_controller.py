@@ -23,9 +23,11 @@ It's roughly similar to the one Brandon Heller did for NOX.
 
 from pox.core import core
 import pox.openflow.libopenflow_01 as of
+from pox.lib.util import dpid_to_str
+import pickle
+import random
 
 log = core.getLogger()
-
 
 
 class Tutorial (object):
@@ -37,6 +39,11 @@ class Tutorial (object):
     # Keep track of the connection to the switch so that we can
     # send it messages!
     self.connection = connection
+    log.warn("agh")
+    log.warn(connection)
+    log.warn(dpid_to_str(connection.dpid))
+    self.all_paths = pickle.load(open("pox/ext/paths.pkl", 'r'))
+    log.warn(len(self.all_paths))
 
     # This binds our PacketIn event listener
     connection.addListeners(self)
@@ -44,6 +51,7 @@ class Tutorial (object):
     # Use this table to keep track of which ethernet address is on
     # which switch port (keys are MACs, values are ports).
     self.mac_to_port = {}
+    self.already_broadcast = set()
 
 
   def resend_packet (self, packet_in, out_port):
@@ -117,7 +125,91 @@ class Tutorial (object):
       self.resend_packet(packet_in, of.OFPP_ALL)
 
     """ # DELETE THIS LINE TO START WORKING ON THIS #
+    #log.warn(packet.next.id)
+    #log.warn(type(packet.next))
 
+    S = 512
+    mymac = self.connection.dpid
+    myswno = mymac - 1
+    packetsrc = int(packet.src.raw.encode('hex'), 16)
+    packetdst = int(packet.dst.raw.encode('hex'), 16)
+    src = packetsrc - 1 - S
+    dst = packetdst - 1 - S
+    if (dst, src) in self.all_paths:
+      self.all_paths[(src, dst)] = list(map(lambda x: list(reversed(x)), self.all_paths[(dst,src)]))
+    if (src, dst) not in self.all_paths:
+      if str(packet.dst) != 'ff:ff:ff:ff:ff:ff':
+        log.warn(str(src) + " " + str(dst) + " is not in " + str(self.all_paths))
+        log.warn("bpack " + str(packet_in))
+        log.warn("bpack " + str(packet))
+        log.warn("just broadcast #1... " + str(packet.src) + " " +str(packet.dst))
+        print str(packet.dst) + " not known, resend to everybody"
+      self.resend_packet(packet_in, of.OFPP_ALL)
+      return
+    log.warn("pack")
+    log.warn(packet.src)
+    log.warn(packet.src.raw)
+    log.warn(packetsrc)
+    log.warn(src)
+
+    paths = self.all_paths[(src, dst)]
+    possible_paths = []
+    for p in paths:
+      if p[-1] == myswno:
+        # send to server attached to this switch
+        port = packetdst # convert server no (dst) to port on this switch
+        self.resend_packet(packet_in, port)
+        return
+      elif myswno in p:
+        possible_paths.append(p)
+    if len(possible_paths) >= 1:
+      mypath = random.choice(possible_paths)
+      idx = mypath.index(myswno)
+      next_switch = mypath[idx+1]
+      port = next_switch + 1# convert switch no (next_switch) to port on this switch
+      self.resend_packet(packet_in, port)
+    else:
+      log.warn(str(src) +" "+ str(dst) + str(self.all_paths))
+      log.warn("just broadcast #2...")
+      # somehow the packet has lost its way...
+      # just drop it!
+      print str(packet.dst) + " not known, resend to everybody"
+      self.resend_packet(packet_in, of.OFPP_ALL)
+
+    '''
+    if packet.src not in self.mac_to_port:
+      print "Learning that " + str(packet.src) + " is attached at port " + str(packet_in.in_port)
+      self.mac_to_port[packet.src] = packet_in.in_port
+    # self.mac_to_port ... <add or update entry>
+
+    # if the port associated with the destination MAC of the packet is known:
+    if packet.dst in self.mac_to_port:
+      # Send packet out the associated port
+      print str(packet.dst) + " destination known. only send message to it"
+      self.resend_packet(packet_in, self.mac_to_port[packet.dst])
+
+      # Once you have the above working, try pushing a flow entry
+      # instead of resending the packet (comment out the above and
+      # uncomment and complete the below.)
+
+      # log.debug("Installing flow...")
+      # Maybe the log statement should have source/destination/port?
+
+      #msg = of.ofp_flow_mod()
+      #
+      ## Set fields to match received packet
+      #msg.match = of.ofp_match.from_packet(packet)
+      #
+      #< Set other fields of flow_mod (timeouts? buffer_id?) >
+      #
+      #< Add an output action, and send -- similar to resend_packet() >
+
+    else:
+      # Flood the packet out everything but the input port
+      # This part looks familiar, right?
+      print str(packet.dst) + " not known, resend to everybody"
+      self.resend_packet(packet_in, of.OFPP_ALL)
+    '''
 
   def _handle_PacketIn (self, event):
     """
@@ -136,9 +228,9 @@ class Tutorial (object):
     print "Src: " + str(packet.src)
     print "Dest: " + str(packet.dst)
     print "Event port: " + str(event.port)
-    self.act_like_hub(packet, packet_in)
+    #self.act_like_hub(packet, packet_in)
     log.info("packet in")
-    #self.act_like_switch(packet, packet_in)
+    self.act_like_switch(packet, packet_in)
 
 
 
