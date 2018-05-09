@@ -180,7 +180,7 @@ class JellyFishTop(Topo):
         S = 512
         graph = build_graph(n_switch, n_interswitch_ports, n_server_oports, n_servers)
         serv_switch, switch_serv = add_servers(n_switch, n_server_oports, n_servers)
-        paths = get_paths(self.perm, graph, serv_switch, 8, n_servers, "ecmp")
+        paths = get_paths(self.perm, graph, serv_switch, 8, n_servers, "kshortest")
         print graph, serv_switch, paths
 
         bw = 5
@@ -261,7 +261,7 @@ def experiment(net):
     all_servers = map(lambda x: net.get(x), net.topo.px_servers)
     all_switches = map(lambda x: net.get(x), net.topo.px_switches)
     print all_servers, all_switches
-    print("WTF3", type(all_servers[0]))
+    print("hey", type(all_servers[0]))
     #net.pingAll()
     mysenders = []
     myreceivers = []
@@ -277,7 +277,8 @@ def experiment(net):
     print server_perm
     print mysenders, mysenders
 
-    results = pairTest(mysenders, myreceivers)
+    #results = pairTest(mysenders, myreceivers)
+    net.pingAll()
     print results
     
 

@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 """
 Analyze and plot results from pair_intervals test
 
